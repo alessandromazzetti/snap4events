@@ -1,0 +1,14 @@
+# Virtual Env
+.venv/
+
+# Config and credentials
+user_credentials.json
+clearml_config.json
+
+# Logs
+messages.json
+
+# File system
+.idea/
+__pycache__/
+*.pyc
