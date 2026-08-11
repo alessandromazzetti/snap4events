@@ -5,6 +5,7 @@
 user_credentials.json
 clearml_config.json
 token_stored.json
+.env
 
 # Logs
 messages.json
