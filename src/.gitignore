@@ -1,9 +1,10 @@
 # Virtual Env
-.venv/
+../.venv/
 
 # Config and credentials
 user_credentials.json
 clearml_config.json
+token_stored.json
 
 # Logs
 messages.json
