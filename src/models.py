@@ -1,4 +1,4 @@
-from __future__ import annotations
+
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional, List
 from datetime import datetime
@@ -37,18 +37,8 @@ class Event(BaseModel):
 
     @classmethod
     def from_km4city_feature(cls, feature: dict) -> "Event":
-        """
-        Converte una Feature GeoJSON restituita dall'endpoint /events/ delle
-        Km4City/Snap4City Advanced Smart City API in un'istanza di Event.
+        """Converts GeoJSON obtained from /events/ endpoint of Km4City/Snap4City in an event object."""
 
-        NOTA IMPORTANTE: lo swagger pubblico referenzia lo schema
-        'EventsJsonDocument' senza pubblicarne i dettagli campo per campo.
-        I nomi qui sotto (name, category, dateStart, address, municipality, ecc.)
-        sono quelli tipici usati da Km4City per i servizi/eventi geolocalizzati,
-        ma vanno verificati contro una risposta reale prima di andare in
-        produzione: stampa `json.dumps(feature, indent=2)` per un evento reale
-        e allinea le chiavi usate qui sotto se necessario.
-        """
         props = feature.get("properties", {}) or {}
         geometry = feature.get("geometry", {}) or {}
 
@@ -59,10 +49,9 @@ class Event(BaseModel):
         ).lower()
         category_keywords = {
             "sport": EventCategory.SPORT,
-            "cultur": EventCategory.CULTURE,
+            "culture": EventCategory.CULTURE,
             "cinema": EventCategory.CINEMA,
             "festival": EventCategory.FESTIVAL,
-            "sagra": EventCategory.FESTIVAL,
             "concert": EventCategory.CONCERT,
             "club": EventCategory.CLUB,
         }
@@ -84,7 +73,6 @@ class Event(BaseModel):
         coordinates = None
         coords = geometry.get("coordinates")
         if coords and len(coords) >= 2:
-            # GeoJSON usa l'ordine [longitude, latitude]
             coordinates = Coordinates(latitude=coords[1], longitude=coords[0])
 
         source_url = props.get("uri") or props.get("serviceUri") or "https://www.km4city.org/"
@@ -101,3 +89,14 @@ class Event(BaseModel):
             source_url=source_url,
             image_urls=props.get("images", []) or [],
         )
+
+class LocationExtraction(BaseModel):
+    target_location: str = Field(description="The name of the city, municipality, or location.")
+    latitude: float = Field(description="The approximate geographical latitude.")
+    longitude: float = Field(description="The approximate geographical longitude.")
+
+class EventList(BaseModel):
+    events: List[Event] = Field(
+        default=[],
+        description="A list of structured events extracted from the webpage text."
+    )

@@ -1,79 +1,56 @@
-import json
 import os
-from datetime import datetime
-from token_manager import TokenManager
-from models import Event, EventCategory, Coordinates
-from km4city_client import KM4CityClient
+import asyncio
+import logging
+from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
+from builder import create_agent_app
 
-# Loads credentials
-def load_credentials(path="user_credentials.json"):
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Credentials '{path}'not found.")
-    with open(path, "r") as f:
-        return json.load(f)
+logging.basicConfig(level=logging.WARNING)
 
-# Calls endpoint /events/ of Km4City/Snap4City Advanced Smart City API for a specific area (default:
-# Firenze) and validates obtained results with Pydantic Event model
-def fetch_and_validate_events(token_manager=None, lat=45.4642, lon=9.1900, range_="month"):
 
-    print(f"\n[KM4CITY] Retrieving events around (lat={lat}, lon={lon}), range='{range_}'...")
-    client = KM4CityClient(token_manager=token_manager)
+async def run_agent(question: str):
+    print("=" * 50)
+    print("SNAP4EVENTS AGENT - START")
+    print(f"👤 Query: {question}")
+    print("=" * 50)
 
-    try:
-        raw_data = client.search_events(lat=lat, lon=lon, range_=range_, max_dists=15, max_results=50)
-    except Exception as e:
-        print(f"[KM4CITY ERROR] Failed request: {e}")
-        return []
+    # LLM init
+    model = ChatGoogleGenerativeAI(
+        model="gemini-3.5-flash",
+        temperature=0,
+        google_api_key=os.getenv("GOOGLE_API_KEY")
+    )
 
-    features = raw_data.get("features", [])
-    print(f"[KM4CITY] Found {len(features)} events (fullCount: {raw_data.get('fullCount', '?')})")
+    # Creates app and assign the LLM model to it
+    app = create_agent_app(model=model, mcp_client=None)
 
-    validated_events = []
-    for feature in features:
-        # DEBUG: prints raw structure for veriyfing
-        print("\n--- Dettaglio Feature Grezza (per confronto campi) ---")
-        print(json.dumps(feature, indent=2))
-        print("------------------------------------------------------\n")
+    # Run graph
+    final_state = await app.ainvoke({
+        "user_query": question,
+        "target_location": "",
+        "latitude": 0.0,
+        "longitude": 0.0,
+        "discovered_sources": [],
+        "raw_page_contents": [],
+        "events": [],
+        "errors": [],
+        "current_step": "start"
+    })
 
-        try:
-            event = Event.from_km4city_feature(feature)
-            validated_events.append(event)
-        except Exception as e:
-            print(f"[KM4CITY WARNING] Invalid event: {e}")
+    print("\n✅ [RESULT]")
+    print(f"Event extracted: {len(final_state['events'])}")
 
-    print(f"[KM4CITY] {len(validated_events)} events correctly validated.")
-    return validated_events
-
-def main():
-    print("=== Local test snap4events ===")
-
-    # Loads credentials and init token manager
-    token_manager = None
-    try:
-        creds = load_credentials("user_credentials.json")
-        username = creds.get("username")
-        password = creds.get("password")
-
-        print(f"[AUTH] Authentication for user: {username}")
-        token_manager = TokenManager(
-            username=username,
-            password=password,
-            client_id="clearml-apis",
-            store_path="token_stored.json"
-        )
-
-        # Test retrieve token from Snap4City
-        access_token = token_manager.get_token()
-        print(f"[AUTH] Token successively obtained! (Length: {len(access_token)})")
-
-    except Exception as e:
-        print(f"[AUTH ERROR] Failed authentication: {e}")
-
-    # Retrieve events
-    km4city_events = fetch_and_validate_events(token_manager=token_manager)
-    for ev in km4city_events[:3]:
-        print(ev.model_dump_json(indent=2))
+    if final_state['events']:
+        print("\n--- DETAILS ---")
+        for i, ev in enumerate(final_state['events'], 1):
+            print(f"\nEvento #{i}:")
+            # .model_dump_json(indent=2) is a Pydantic command to convert a Python object in a JSON format
+            print(ev.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    load_dotenv()
+
+    asyncio.run(run_agent(
+        "I am looking for electronic music near Florence this weekend"
+    ))
