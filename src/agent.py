@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from langchain_google_genai import ChatGoogleGenerativeAI
 from builder import create_agent_app
-logging.basicConfig(level=logging.WARNING)
 
 logging.basicConfig(level=logging.WARNING)
 
