@@ -1,10 +1,10 @@
 import asyncio
 import requests
+import json
 from datetime import datetime
 from bs4 import BeautifulSoup
 from tavily import TavilyClient
 from langchain_google_genai import ChatGoogleGenerativeAI
-
 from state import AgentState
 from models import LocationExtraction, EventList
 
@@ -45,6 +45,7 @@ async def analyze_query_node(state: AgentState) -> AgentState:
         target_location = "Florence"
         lat, lon = 43.7697, 11.2556
 
+    # **state = dictionary unpacking allows python to take the old state and to copy new values only in it
     return {**state, "target_location": target_location, "latitude": lat, "longitude": lon,
             "current_step": "query_analyzed"}
 
@@ -121,3 +122,33 @@ async def extract_events_node(state: AgentState) -> AgentState:
 
     print(f"[NODE 3] Total events extracted: {len(extracted_events_total)}")
     return {**state, "events": extracted_events_total, "current_step": "events_extracted"}
+
+# ---------------------------------------------------------
+# Node 4: Save to Database (via MCP)
+# ---------------------------------------------------------
+async def save_events_node(state: AgentState) -> AgentState:
+    """Converts extracted events to JSON and saves them via MCP DB Server."""
+    print("\n[NODE 4] Saving events to SQLite database via MCP...")
+    events = state.get("events", [])
+
+    if not events:
+        print("[NODE 4] No events to save.")
+        return {**state, "current_step": "db_saved_empty"}
+
+    # Serialize events in one string
+    events_json_list = [ev.model_dump(mode='json') for ev in events]
+    events_json_str = json.dumps(events_json_list)
+
+    try:
+        # Calls MCP Server tool through the client
+        mcp_client = state.get("mcp_client")
+        if mcp_client:
+            result = await mcp_client.call_tool("save_events_to_db", {"events_json": events_json_str})
+            print(f"[NODE 4 SUCCESS] {result}")
+        else:
+            print("[NODE 4 WARNING] MCP Client not provided in state. Skipping DB save.")
+
+    except Exception as e:
+        print(f"[NODE 4 ERROR] Failed to save events via MCP: {e}")
+
+    return {**state, "current_step": "db_saved"}

@@ -12,3 +12,4 @@ class AgentState(TypedDict):
     events: List[Event]
     errors: List[str]
     current_step: str
+    mcp_client: Any

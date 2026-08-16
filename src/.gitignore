@@ -14,3 +14,6 @@ messages.json
 .idea/
 __pycache__/
 *.pyc
+
+# Database
+snap4events.db
