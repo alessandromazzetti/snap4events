@@ -1,0 +1,12 @@
+cat > requirements.txt <<'EOF'
+pydantic
+requests
+python-dotenv
+fastmcp
+langchain-openai
+langchain-google-genai
+langgraph
+beautifulsoup4
+tavily-python
+typing-extensions
+EOF
