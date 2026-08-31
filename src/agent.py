@@ -27,8 +27,8 @@ async def run_agent(question: str):
             google_api_key=os.getenv("GOOGLE_API_KEY")
         )
 
-        # Creates app and assign the LLM model to it
-        app = create_agent_app(model=model, mcp_client=None)
+        # Creates app (model and mcp_client are injected via the initial state below)
+        app = create_agent_app()
 
         # Run graph
         final_state = await app.ainvoke({
@@ -41,7 +41,8 @@ async def run_agent(question: str):
             "events": [],
             "errors": [],
             "current_step": "start",
-            "mcp_client": mcp_client
+            "mcp_client": mcp_client,
+            "model": model
         })
 
         print("\n✅ [RESULT]")
@@ -60,6 +61,8 @@ async def run_agent(question: str):
 if __name__ == "__main__":
     load_dotenv()
 
-    asyncio.run(run_agent(
-        "I am looking for electronic music near Florence this weekend"
-    ))
+    default_question = "I am looking for events near Florence this weekend"
+    user_input = input(f"Enter your query (press Enter for default: '{default_question}'): ").strip()
+    question = user_input if user_input else default_question
+
+    asyncio.run(run_agent(question))

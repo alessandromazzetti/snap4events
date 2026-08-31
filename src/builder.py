@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph, END
 from state import AgentState
 from nodes import analyze_query_node, search_sources_node, extract_events_node, save_events_node
 
-def create_agent_app(model=None, mcp_client=None):
+def create_agent_app():
     """Define Langgraph graph and models agent flow."""
 
     workflow = StateGraph(AgentState)

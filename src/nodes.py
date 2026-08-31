@@ -19,7 +19,10 @@ async def analyze_query_node(state: AgentState) -> AgentState:
     query = state.get("user_query", "")
     print(f"\n[NODE 1] Analyzing query: '{query}'")
 
-    llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
+    llm = state.get("model")
+    if llm is None:
+        print("[NODE 1 WARNING] No model found in state, falling back to default Gemini client.")
+        llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
     structured_llm = llm.with_structured_output(LocationExtraction)
 
     prompt = f"""
@@ -86,7 +89,10 @@ async def extract_events_node(state: AgentState) -> AgentState:
     location = state.get("target_location", "the area")
     extracted_events_total = []
 
-    llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
+    llm = state.get("model")
+    if llm is None:
+        print("[NODE 3 WARNING] No model found in state, falling back to default Gemini client.")
+        llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
     structured_llm = llm.with_structured_output(EventList)
     current_date = datetime.now().strftime("%Y-%m-%d")
 

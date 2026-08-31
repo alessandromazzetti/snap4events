@@ -53,8 +53,8 @@ async def run_agent(question: str):
             default_headers={"Authorization": f"Bearer {auth_token}"}
         )
 
-        # 6. Run langgraph app and assigns model and mcp client to it
-        app = create_agent_app(model=model, mcp_client=mcp_client)
+        # 6. Build the graph (model and mcp_client are injected via the initial state below)
+        app = create_agent_app()
 
         # 7. Run graph
         final_state = await app.ainvoke({
@@ -67,7 +67,8 @@ async def run_agent(question: str):
             "events": [],
             "errors": [],
             "current_step": "start",
-            "mcp_client": mcp_client
+            "mcp_client": mcp_client,
+            "model": model
         })
 
         print("\n✅ [RESULT]")
@@ -87,7 +88,8 @@ async def run_agent(question: str):
 if __name__ == "__main__":
     load_dotenv()
 
-    # Test query
-    asyncio.run(run_agent(
-        "I am looking for electronic music near Florence this weekend"
-    ))
+    default_question = "I am looking for events near Florence this weekend"
+    user_input = input(f"Enter your query (press Enter for default: '{default_question}'): ").strip()
+    question = user_input if user_input else default_question
+
+    asyncio.run(run_agent(question))

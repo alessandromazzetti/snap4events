@@ -13,3 +13,4 @@ class AgentState(TypedDict):
     errors: List[str]
     current_step: str
     mcp_client: Any
+    model: Any
