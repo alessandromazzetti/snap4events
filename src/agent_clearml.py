@@ -1,4 +1,3 @@
-```python
 import os
 import json
 import asyncio
@@ -153,4 +152,3 @@ if __name__ == "__main__":
     question = user_input if user_input else default_question
 
     asyncio.run(run_agent(question))
-```

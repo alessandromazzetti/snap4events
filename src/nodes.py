@@ -1,4 +1,3 @@
-````python
 import asyncio
 import requests
 import json
@@ -403,4 +402,3 @@ async def save_events_node(state: AgentState) -> AgentState:
         **state,
         "current_step": "db_saved"
     }
-````
