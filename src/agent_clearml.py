@@ -22,13 +22,11 @@ class ClearMLClient:
     def __init__(
         self,
         access_token,
-        machine_id,
         endpoint,
         base_url,
         temperature=0
     ):
         self.access_token = access_token
-        self.machine_id = machine_id
         self.endpoint = endpoint
         self.base_url = base_url
         self.temperature = temperature
@@ -102,7 +100,6 @@ async def run_agent(question: str):
         # 5. Init ClearML client, pointing to the Snap4City LLM end-point
         llm_client = ClearMLClient(
             access_token=auth_token,
-            machine_id=machine_id,
             endpoint=llm_endpoint,
             base_url=api_base_url,
             temperature=temperature
