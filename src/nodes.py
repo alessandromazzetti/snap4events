@@ -267,49 +267,66 @@ async def extract_events_node(state: AgentState) -> AgentState:
             )[:15000]
 
             prompt = f"""
-You are an expert data extractor. Identify upcoming public events.
+            You are an expert data extractor. Identify upcoming public events.
 
-Return ONLY valid JSON.
+            Return ONLY valid JSON.
 
-Required JSON format:
+            Required JSON format:
 
-{{
-    "events": [
-        {{
-            "title": "Event title",
-            "category": "concert",
-            "start_datetime": "2026-08-31T20:00:00",
-            "venue": "Venue name",
-            "city": "Firenze",
-            "source_url": "{url}"
-        }}
-    ]
-}}
+            {{
+                "events": [
+                    {{
+                        "title": "Event title",
+                        "category": "concert",
+                        "start_datetime": "2026-08-31T20:00:00",
+                        "venue": "Venue name",
+                        "city": "Firenze",
+                        "source_url": "{url}"
+                    }}
+                ]
+            }}
 
-CRITICAL RULES:
+            CRITICAL RULES:
 
-1. 'start_datetime' MUST be a valid ISO 8601 datetime
-   (e.g., '2026-08-14T20:00:00').
+            1. 'category' MUST be exactly one of:
+               - "sport"
+               - "culture"
+               - "cinema"
+               - "festival"
+               - "concert"
+               - "club"
+               - "other"
 
-2. Today is {current_date}. Calculate upcoming dates correctly.
+            2. Never use any other value for 'category'.
 
-3. If venue is missing, use "N/D".
+            3. Examples:
+               - running events -> "sport"
+               - food tours -> "culture"
+               - antique markets -> "other"
+               - nightlife events -> "club"
 
-4. If city is missing, default to '{location}'.
+            4. 'start_datetime' MUST be a valid ISO 8601 datetime
+               (e.g., '2026-08-14T20:00:00').
 
-5. Set source_url strictly to:
-   {url}
+            5. Today is {current_date}. Calculate upcoming dates correctly.
 
-6. Do not invent events.
+            6. If venue is missing, use "N/D".
 
-7. Do not include markdown.
+            7. If city is missing, default to '{location}'.
 
-8. Do not include explanations.
+            8. Set source_url strictly to:
+               {url}
 
-Webpage Text:
+            9. Do not invent events.
 
-{text_content}
-"""
+            10. Do not include markdown.
+
+            11. Do not include explanations.
+
+            Webpage Text:
+
+            {text_content}
+            """
 
             # Asynchronous call to ClearML
             raw_response = await call_llm(
