@@ -1,14 +1,71 @@
+```python
 import os
 import json
 import asyncio
 import logging
+import requests
+
 from dotenv import load_dotenv
 from fastmcp import Client
-from langchain_openai import ChatOpenAI
 from builder import create_agent_app
 from token_manager import TokenManager
 
 logging.basicConfig(level=logging.WARNING)
+
+
+class ClearMLClient:
+    """
+    Client for calling the Snap4City ClearML OnDemand inference API directly.
+
+    This does NOT use OpenAI or LangChain.
+    """
+
+    def __init__(
+        self,
+        access_token,
+        machine_id,
+        endpoint,
+        base_url,
+        temperature=0
+    ):
+        self.access_token = access_token
+        self.machine_id = machine_id
+        self.endpoint = endpoint
+        self.base_url = base_url
+        self.temperature = temperature
+
+    def generate(self, prompt):
+        """Send a prompt directly to the ClearML OnDemand API."""
+
+        body = {
+            "access_token": self.access_token,
+            "machine_id": self.machine_id,
+            "endpoint": self.endpoint,
+            "params": {
+                "prompt": prompt,
+                "temperature": self.temperature
+            }
+        }
+
+        response = requests.post(
+            self.base_url,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            },
+            json=body,
+            timeout=120
+        )
+
+        print(f"[CLEARML] Status code: {response.status_code}")
+
+        if not response.ok:
+            raise RuntimeError(
+                f"ClearML API error {response.status_code}: "
+                f"{response.text[:2000]}"
+            )
+
+        return response.json()
 
 
 async def run_agent(question: str):
@@ -26,6 +83,7 @@ async def run_agent(question: str):
 
     api_base_url = clearml_config["clearml_ondemand_api_base_url"]
     llm_endpoint = clearml_config["clearml_llm_endpoint"]
+    machine_id = clearml_config["machine_id"]
     temperature = clearml_config.get("temperature", 0)
 
     # 2. Loads credentials
@@ -44,16 +102,16 @@ async def run_agent(question: str):
     await mcp_client.__aenter__()
 
     try:
-        # 5. Init model, pointing to the Snap4City LLM end-point
-        model = ChatOpenAI(
+        # 5. Init ClearML client, pointing to the Snap4City LLM end-point
+        llm_client = ClearMLClient(
+            access_token=auth_token,
+            machine_id=machine_id,
+            endpoint=llm_endpoint,
             base_url=api_base_url,
-            api_key=auth_token,
-            model=llm_endpoint,
-            temperature=temperature,
-            default_headers={"Authorization": f"Bearer {auth_token}"}
+            temperature=temperature
         )
 
-        # 6. Build the graph (model and mcp_client are injected via the initial state below)
+        # 6. Build the graph (ClearML client and mcp_client are injected via the initial state below)
         app = create_agent_app()
 
         # 7. Run graph
@@ -68,7 +126,7 @@ async def run_agent(question: str):
             "errors": [],
             "current_step": "start",
             "mcp_client": mcp_client,
-            "model": model
+            "llm_client": llm_client
         })
 
         print("\n✅ [RESULT]")
@@ -89,7 +147,10 @@ if __name__ == "__main__":
     load_dotenv()
 
     default_question = "I am looking for events near Florence this weekend"
-    user_input = input(f"Enter your query (press Enter for default: '{default_question}'): ").strip()
+    user_input = input(
+        f"Enter your query (press Enter for default: '{default_question}'): "
+    ).strip()
     question = user_input if user_input else default_question
 
     asyncio.run(run_agent(question))
+```
