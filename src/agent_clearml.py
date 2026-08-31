@@ -31,23 +31,47 @@ class ClearMLClient:
         self.base_url = base_url
         self.temperature = temperature
 
-    def generate(self, prompt):
-        """Send a prompt directly to the ClearML OnDemand API."""
+    def generate(
+        self,
+        prompt=None,
+        messages=None,
+        tools=None,
+        tool_choice=None,
+        temperature=None
+    ):
+        """Send a prompt or multimodal messages directly to the ClearML OnDemand API."""
+
+        params = {}
+
+        if messages is not None:
+            params["messages"] = messages
+        elif prompt is not None:
+            params["prompt"] = prompt
+        else:
+            raise ValueError("Either 'prompt' or 'messages' must be provided.")
+
+        params["temperature"] = (
+            self.temperature if temperature is None else temperature
+        )
+
+        if tools is not None:
+            params["tools"] = tools
+
+        if tool_choice is not None:
+            params["tool_choice"] = tool_choice
 
         body = {
             "access_token": self.access_token,
             "endpoint": self.endpoint,
-            "params": {
-                "prompt": prompt,
-                "temperature": self.temperature
-            }
+            "params": params
         }
 
         response = requests.post(
             self.base_url,
             headers={
                 "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.access_token}"
             },
             json=body,
             timeout=120
@@ -89,7 +113,10 @@ async def run_agent(question: str):
         creds = json.load(f)
 
     # 3. Obtain a valid token
-    manager = TokenManager(username=creds["username"], password=creds["password"])
+    manager = TokenManager(
+        username=creds["username"],
+        password=creds["password"]
+    )
     auth_token = manager.get_token()
 
     # 4. Connection to the MCP server
@@ -126,9 +153,9 @@ async def run_agent(question: str):
         print("\n✅ [RESULT]")
         print(f"Events extracted: {len(final_state['events'])}")
 
-        if final_state['events']:
+        if final_state["events"]:
             print("\n--- DETAILS ---")
-            for i, ev in enumerate(final_state['events'], 1):
+            for i, ev in enumerate(final_state["events"], 1):
                 print(f"\nEvent #{i}:")
                 print(ev.model_dump_json(indent=2))
 
