@@ -38,7 +38,6 @@ class ClearMLClient:
 
         body = {
             "access_token": self.access_token,
-            "machine_id": self.machine_id,
             "endpoint": self.endpoint,
             "params": {
                 "prompt": prompt,
@@ -82,7 +81,6 @@ async def run_agent(question: str):
 
     api_base_url = clearml_config["clearml_ondemand_api_base_url"]
     llm_endpoint = clearml_config["clearml_llm_endpoint"]
-    machine_id = clearml_config["machine_id"]
     temperature = clearml_config.get("temperature", 0)
 
     # 2. Loads credentials
