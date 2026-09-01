@@ -40,6 +40,58 @@ def parse_llm_json(response):
     return json.loads(text)
 
 
+def salvage_truncated_events_json(response):
+    """Best-effort recovery for an LLM response that was cut off mid-JSON
+    (typically because the output hit a token limit). Instead of discarding
+    the whole batch, walk the 'events' array and keep every event object
+    that was fully generated before the truncation point.
+
+    Returns a list of dicts (possibly empty if nothing could be salvaged).
+    """
+
+    if not isinstance(response, str):
+        return []
+
+    text = response.strip()
+
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+    array_start = text.find("[")
+
+    if array_start == -1:
+        return []
+
+    decoder = json.JSONDecoder()
+    pos = array_start + 1
+    salvaged = []
+
+    while True:
+        # Skip whitespace/commas between elements
+        while pos < len(text) and text[pos] in " \t\n\r,":
+            pos += 1
+
+        if pos >= len(text) or text[pos] == "]":
+            break
+
+        try:
+            obj, end = decoder.raw_decode(text, pos)
+        except json.JSONDecodeError:
+            # This is the object that got cut off mid-way: stop here,
+            # keep whatever was successfully parsed before it.
+            break
+
+        salvaged.append(obj)
+        pos = end
+
+    return salvaged
+
+
 # ---------------------------------------------------------
 # Helper: Call ClearML
 # ---------------------------------------------------------
@@ -258,7 +310,7 @@ def event_from_db_row(row: dict) -> Event:
 
 
 # ---------------------------------------------------------
-# Node 2b: RAG step
+# Node 2b: RAG decision - let the LLM decide whether to trust retrieval
 # ---------------------------------------------------------
 
 async def decide_retrieval_usage_node(state: AgentState) -> AgentState:
@@ -442,7 +494,15 @@ async def extract_events_node(state: AgentState) -> AgentState:
             response = await asyncio.to_thread(
                 requests.get,
                 url,
-                timeout=10
+                timeout=10,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0.0.0 Safari/537.36"
+                    ),
+                    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+                }
             )
 
             response.raise_for_status()
@@ -514,6 +574,10 @@ async def extract_events_node(state: AgentState) -> AgentState:
 
             11. Do not include explanations.
 
+            12. Extract AT MOST 8 events. If the page lists more, keep only
+                the 8 most relevant/upcoming ones. This keeps the response
+                short enough to avoid being cut off.
+
             Webpage Text:
 
             {text_content}
@@ -528,14 +592,36 @@ async def extract_events_node(state: AgentState) -> AgentState:
             # Extract textual answer from API response
             answer = extract_answer(raw_response)
 
-            # Parse JSON returned by the model
-            data = parse_llm_json(answer)
+            try:
+                # Parse JSON returned by the model
+                data = parse_llm_json(answer)
 
-            # Validate using the existing Pydantic model
-            result = EventList(**data)
+                # Validate using the existing Pydantic model
+                result = EventList(**data)
+                page_events = result.events
 
-            if result.events:
-                extracted_events_total.extend(result.events)
+            except (json.JSONDecodeError, ValueError) as parse_err:
+                # The LLM response was likely cut off mid-JSON (token limit).
+                # Salvage whatever complete event objects were generated
+                # before the truncation point, instead of discarding them all.
+                print(
+                    f"  -> [WARNING] JSON truncated/invalid for {url} "
+                    f"({parse_err}); attempting to salvage partial events."
+                )
+
+                salvaged_raw = salvage_truncated_events_json(answer)
+                page_events = []
+
+                for raw_event in salvaged_raw:
+                    try:
+                        page_events.append(Event(**raw_event))
+                    except Exception as event_err:
+                        print(f"  -> [WARNING] Skipping unsalvageable event: {event_err}")
+
+                print(f"  -> [WARNING] Salvaged {len(page_events)} event(s) out of a truncated response.")
+
+            if page_events:
+                extracted_events_total.extend(page_events)
 
             await asyncio.sleep(2)
 
