@@ -184,16 +184,70 @@ User query:
         "current_step": "query_analyzed"
     }
 
+# ---------------------------------------------------------
+# Node 2: Retrieve
+# ---------------------------------------------------------
+
+async def search_db_node(state: AgentState) -> AgentState:
+    """Look inside the database for already stored events."""
+
+    location = state.get("target_location", "")
+    print(f"\n[NODE 2] Looking inside the database for: {location}")
+
+    mcp_client = state.get("mcp_client")
+
+    if not mcp_client:
+        print(f"[NODE 2] MCP Client not available.")
+        return {
+            **state,
+            "current_step": "db_retrieval_skipped"
+        }
+
+    date_from = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        result = await mcp_client.call_tool(
+            "get_events",
+            {
+                "location": location,
+                "date_from": date_from,
+                "limit": 50
+            }
+        )
+
+        # Create a python list out of a JSON string
+        if hasattr(result, "data") and result.data:
+            events = json.loads(result.data)
+        else:
+            events = []
+
+        print(f"[NODE 2] Found {len(events)} events in database: {result}")
+
+        return {
+            **state,
+            "retrieved_events": result
+            "current_step": "events_retrieved"
+        }
+
+    except Exception as e:
+        print(f"[NODE 2 ERROR] Failed to retrieve events: {e}")
+
+        return {
+            **state,
+            "retrieved_events": None
+            "current_step": "db_retrieval_error"
+        }
+
 
 # ---------------------------------------------------------
-# Node 2: Search
+# Node 3: Search
 # ---------------------------------------------------------
 
 async def search_sources_node(state: AgentState) -> AgentState:
     """Finds URLs containing info about events in the given location using Tavily."""
 
     location = state.get("target_location", "")
-    print(f"\n[NODE 2] Searching web for: {location}")
+    print(f"\n[NODE 3] Searching web for: {location}")
 
     search_query = f"best event sites festivals clubs {location} today weekend"
 
@@ -213,10 +267,10 @@ async def search_sources_node(state: AgentState) -> AgentState:
             for res in response.get("results", [])
         ]
 
-        print(f"[NODE 2] Found {len(discovered_urls)} URLs")
+        print(f"[NODE 3] Found {len(discovered_urls)} URLs")
 
     except Exception as e:
-        print(f"[NODE 2 ERROR] {e}")
+        print(f"[NODE 3 ERROR] {e}")
         discovered_urls = []
 
     return {
@@ -227,14 +281,14 @@ async def search_sources_node(state: AgentState) -> AgentState:
 
 
 # ---------------------------------------------------------
-# Node 3: Extract
+# Node 4: Extract
 # ---------------------------------------------------------
 
 async def extract_events_node(state: AgentState) -> AgentState:
     """Scrapes data from the URLs obtained at node 2, extracts clean text using BeautifulSoup and
     uses the ClearML LLM to parse it into existent Pydantic models."""
 
-    print("\n[NODE 3] Scraping and parsing events...")
+    print("\n[NODE 4] Scraping and parsing events...")
 
     urls = state.get("discovered_sources", [])
     location = state.get("target_location", "the area")
@@ -354,7 +408,7 @@ async def extract_events_node(state: AgentState) -> AgentState:
             )
 
     print(
-        f"[NODE 3] Total events extracted: "
+        f"[NODE 4] Total events extracted: "
         f"{len(extracted_events_total)}"
     )
 
@@ -366,18 +420,18 @@ async def extract_events_node(state: AgentState) -> AgentState:
 
 
 # ---------------------------------------------------------
-# Node 4: Save to Database (via MCP)
+# Node 5: Save to Database (via MCP)
 # ---------------------------------------------------------
 
 async def save_events_node(state: AgentState) -> AgentState:
     """Converts extracted events to JSON and saves them via MCP DB Server."""
 
-    print("\n[NODE 4] Saving events to SQLite database via MCP...")
+    print("\n[NODE 5] Saving events to SQLite database via MCP...")
 
     events = state.get("events", [])
 
     if not events:
-        print("[NODE 4] No events to save.")
+        print("[NODE 5] No events to save.")
 
         return {
             **state,
@@ -402,17 +456,17 @@ async def save_events_node(state: AgentState) -> AgentState:
                 {"events_json": events_json_str}
             )
 
-            print(f"[NODE 4 SUCCESS] {result}")
+            print(f"[NODE 5 SUCCESS] {result}")
 
         else:
             print(
-                "[NODE 4 WARNING] MCP Client not provided "
+                "[NODE 5 WARNING] MCP Client not provided "
                 "in state. Skipping DB save."
             )
 
     except Exception as e:
         print(
-            f"[NODE 4 ERROR] Failed to save events via MCP: {e}"
+            f"[NODE 5 ERROR] Failed to save events via MCP: {e}"
         )
 
     return {
