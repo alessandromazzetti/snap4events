@@ -143,6 +143,8 @@ async def run_agent(question: str):
             "longitude": 0.0,
             "discovered_sources": [],
             "raw_page_contents": [],
+            "retrieved_events": [],
+            "use_retrieved_data": False,
             "events": [],
             "errors": [],
             "current_step": "start",

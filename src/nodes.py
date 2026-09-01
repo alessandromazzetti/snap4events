@@ -5,7 +5,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from tavily import TavilyClient
 from state import AgentState
-from models import LocationExtraction, EventList
+from models import LocationExtraction, EventList, RetrievalDecision, Event
 
 
 # ---------------------------------------------------------
@@ -209,7 +209,7 @@ async def search_db_node(state: AgentState) -> AgentState:
         result = await mcp_client.call_tool(
             "get_events",
             {
-                "location": location,
+                "city": location,
                 "date_from": date_from,
                 "limit": 50
             }
@@ -221,11 +221,11 @@ async def search_db_node(state: AgentState) -> AgentState:
         else:
             events = []
 
-        print(f"[NODE 2] Found {len(events)} events in database: {result}")
+        print(f"[NODE 2] Found {len(events)} events in database")
 
         return {
             **state,
-            "retrieved_events": result
+            "retrieved_events": events,
             "current_step": "events_retrieved"
         }
 
@@ -234,9 +234,146 @@ async def search_db_node(state: AgentState) -> AgentState:
 
         return {
             **state,
-            "retrieved_events": None
+            "retrieved_events": None,
             "current_step": "db_retrieval_error"
         }
+
+
+# ---------------------------------------------------------
+# Helper: Convert a raw DB row (as returned by get_events) into an Event
+# ---------------------------------------------------------
+
+def event_from_db_row(row: dict) -> Event:
+    """Converts a flat event row coming from the SQLite DB (via MCP get_events)
+    into an Event pydantic object, ignoring DB-only bookkeeping columns."""
+
+    return Event(
+        title=row.get("title", "Untitled"),
+        category=row.get("category", "other"),
+        start_datetime=row.get("start_datetime"),
+        venue=row.get("venue", "N/D"),
+        city=row.get("city", "N/D"),
+        source_url=row.get("source_url") or "https://www.km4city.org/",
+    )
+
+
+# ---------------------------------------------------------
+# Node 2b: RAG step
+# ---------------------------------------------------------
+
+async def decide_retrieval_usage_node(state: AgentState) -> AgentState:
+    """Asks the LLM whether the events already retrieved from the database are
+    sufficient and relevant enough to answer the user query, or whether a fresh
+    web search + scrape is needed instead. This is the core RAG routing step:
+    the LLM itself decides if the retrieved context should be used."""
+
+    query = state.get("user_query", "")
+    location = state.get("target_location", "")
+    retrieved_events = state.get("retrieved_events") or []
+
+    print(f"\n[NODE 2b] Deciding whether to use {len(retrieved_events)} retrieved events...")
+
+    # Nothing was retrieved: no point asking the LLM, go straight to web search
+    if not retrieved_events:
+        print("[NODE 2b] No retrieved events available, will search the web.")
+        return {
+            **state,
+            "use_retrieved_data": False,
+            "current_step": "retrieval_rejected_empty"
+        }
+
+    current_date = datetime.now().strftime("%Y-%m-%d")
+
+    # Compact summary of the retrieved events (avoid dumping raw_json/status/etc.)
+    events_summary = [
+        {
+            "title": ev.get("title"),
+            "category": ev.get("category"),
+            "start_datetime": ev.get("start_datetime"),
+            "venue": ev.get("venue"),
+            "city": ev.get("city"),
+        }
+        for ev in retrieved_events
+    ]
+
+    prompt = f"""
+You are deciding whether previously stored event data is good enough to answer
+a user's request, or whether a fresh web search is needed instead.
+
+Today is {current_date}.
+Target location: {location}
+User query: {query}
+
+Events already stored in the database ({len(events_summary)} total):
+{json.dumps(events_summary, ensure_ascii=False, indent=2)}
+
+Decide whether these stored events are sufficient to answer the user query.
+Consider:
+- Relevance: do they actually match what the user is asking for (location, type of event)?
+- Freshness: are there enough upcoming (not past) events?
+- Coverage: is the number of events reasonable, or clearly too sparse?
+
+Return ONLY valid JSON in this exact format:
+
+{{
+    "use_retrieved_data": true,
+    "reasoning": "short explanation"
+}}
+
+Set "use_retrieved_data" to false if the stored events are empty, irrelevant,
+outdated, or clearly insufficient, in which case a web search will be triggered.
+
+Do not include markdown.
+Do not include explanations outside the JSON.
+"""
+
+    try:
+        raw_response = await call_llm(state, prompt)
+        answer = extract_answer(raw_response)
+        data = parse_llm_json(answer)
+        decision = RetrievalDecision(**data)
+
+        print(f"[NODE 2b] Decision: use_retrieved_data={decision.use_retrieved_data} ({decision.reasoning})")
+
+        if decision.use_retrieved_data:
+            # Convert the raw DB rows into validated Event objects to reuse downstream
+            converted_events = []
+
+            for row in retrieved_events:
+                try:
+                    converted_events.append(event_from_db_row(row))
+                except Exception as conv_err:
+                    print(f"[NODE 2b WARNING] Skipping malformed stored event: {conv_err}")
+
+            return {
+                **state,
+                "use_retrieved_data": True,
+                "events": converted_events,
+                "current_step": "retrieval_accepted"
+            }
+
+        return {
+            **state,
+            "use_retrieved_data": False,
+            "current_step": "retrieval_rejected"
+        }
+
+    except Exception as e:
+        print(f"[NODE 2b ERROR] {e}")
+
+        # On any failure, fall back to the safer path: search the web
+        return {
+            **state,
+            "use_retrieved_data": False,
+            "current_step": "retrieval_decision_error"
+        }
+
+
+def route_after_retrieval_decision(state: AgentState) -> str:
+    """Conditional edge: routes to the web-search branch or straight to save,
+    depending on the LLM's decision about the retrieved data."""
+
+    return "use_retrieved" if state.get("use_retrieved_data") else "search_web"
 
 
 # ---------------------------------------------------------

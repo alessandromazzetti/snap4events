@@ -100,3 +100,12 @@ class EventList(BaseModel):
         default=[],
         description="A list of structured events extracted from the webpage text."
     )
+
+class RetrievalDecision(BaseModel):
+    use_retrieved_data: bool = Field(
+        description="True if the events already stored in the database are enough to answer the user query, without needing a fresh web search."
+    )
+    reasoning: str = Field(
+        default="",
+        description="Short explanation of why the retrieved data was accepted or rejected."
+    )

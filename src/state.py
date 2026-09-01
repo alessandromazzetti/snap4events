@@ -9,6 +9,8 @@ class AgentState(TypedDict):
     longitude: Optional[float]
     discovered_sources: List[str]
     raw_page_contents: List[Dict[str, Any]]
+    retrieved_events: List[Dict[str, Any]]
+    use_retrieved_data: bool
     events: List[Event]
     errors: List[str]
     current_step: str

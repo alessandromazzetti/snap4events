@@ -122,7 +122,7 @@ def save_events_to_db(events_json: str) -> str:
                 # sqlite3 reports rowcount=1 both for a fresh INSERT and for the UPDATE
                 # branch of an upsert, so we can't tell them apart from rowcount alone.
                 # We check afterwards whether this row was created_at == updated_at (new)
-                # or not, cheaply, via a follow-up SELECT keyed on the identity columns.
+                # or not through SELECT keyed on the identity columns.
                 cursor.execute(
                     "SELECT created_at, updated_at FROM events WHERE title=? AND start_datetime=? AND venue=?",
                     (ev.get("title", "Untitled"), ev.get("start_datetime"), ev.get("venue", "N/D"))
