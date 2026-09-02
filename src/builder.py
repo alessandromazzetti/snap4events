@@ -8,6 +8,7 @@ from nodes import (
     search_sources_node,
     extract_events_node,
     save_events_node,
+    export_events_pdf_node
 )
 
 def create_agent_app():
@@ -21,6 +22,7 @@ def create_agent_app():
     workflow.add_node("search_sources", search_sources_node)
     workflow.add_node("extract_events", extract_events_node)
     workflow.add_node("save_events", save_events_node)
+    workflow.add_node("export_pdf", export_events_pdf_node)
 
     workflow.set_entry_point("analyze_query")
     workflow.add_edge("analyze_query", "search_db")
@@ -44,6 +46,7 @@ def create_agent_app():
 
     workflow.add_edge("search_sources", "extract_events")
     workflow.add_edge("extract_events", "save_events")
-    workflow.add_edge("save_events", END)
+    workflow.add_edge("save_events", "export_pdf")
+    workflow.add_edge("export_pdf", END)
 
     return workflow.compile()

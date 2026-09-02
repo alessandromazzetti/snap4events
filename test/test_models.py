@@ -19,10 +19,12 @@ def test_event_valid_minimal():
         venue="Teatro Verdi",
         city="Firenze",
         source_url="https://example.com/evento",
+        expected_reach=500
     )
 
     assert ev.title == "Concerto"
     assert ev.category == EventCategory.CONCERT
+    assert ev.expected_reach == 500  # <-- Aggiunto
     assert ev.description is None
     assert ev.coordinates is None
     assert ev.image_urls == []
@@ -36,7 +38,7 @@ def test_event_missing_required_field_raises():
             venue="Teatro Verdi",
             city="Firenze",
             source_url="https://example.com/evento",
-            # title missing
+            expected_reach=500
         )
 
 
@@ -49,6 +51,7 @@ def test_event_invalid_category_raises():
             venue="Teatro Verdi",
             city="Firenze",
             source_url="https://example.com/evento",
+            expected_reach=500
         )
 
 
@@ -76,7 +79,6 @@ def test_event_from_km4city_feature_basic_mapping():
     assert ev.city == "Firenze"
     assert ev.organizer == "Comune di Firenze"
     assert ev.coordinates == Coordinates(latitude=43.7696, longitude=11.2558)
-
 
 def test_event_from_km4city_feature_missing_fields_use_defaults():
     feature = {"properties": {}, "geometry": {}}

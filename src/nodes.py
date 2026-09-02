@@ -1,4 +1,6 @@
 import asyncio
+import os
+
 import requests
 import json
 from datetime import datetime
@@ -6,6 +8,19 @@ from bs4 import BeautifulSoup
 from tavily import TavilyClient
 from state import AgentState
 from models import LocationExtraction, EventList, RetrievalDecision, Event
+import re
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle
+)
+from reportlab.lib import colors
 
 
 # ---------------------------------------------------------
@@ -533,6 +548,7 @@ async def extract_events_node(state: AgentState) -> AgentState:
                         "venue": "Venue name",
                         "city": "Firenze",
                         "source_url": "{url}"
+                        "expected_reach": "50k"
                     }}
                 ]
             }}
@@ -555,6 +571,7 @@ async def extract_events_node(state: AgentState) -> AgentState:
                - food tours -> "culture"
                - antique markets -> "other"
                - nightlife events -> "club"
+               - incidents or weather events -> "other"
 
             4. 'start_datetime' MUST be a valid ISO 8601 datetime
                (e.g., '2026-08-14T20:00:00').
@@ -577,7 +594,11 @@ async def extract_events_node(state: AgentState) -> AgentState:
             12. Extract AT MOST 8 events. If the page lists more, keep only
                 the 8 most relevant/upcoming ones. This keeps the response
                 short enough to avoid being cut off.
-
+            
+            13. If it is not indicated how many people are expected, give an esteem
+                based on similar events: if there are not enough events to make an esteem use 
+                "N/D"
+                
             Webpage Text:
 
             {text_content}
@@ -695,4 +716,117 @@ async def save_events_node(state: AgentState) -> AgentState:
     return {
         **state,
         "current_step": "db_saved"
+    }
+
+# ---------------------------------------------------------
+# Node 6: Export to PDF
+# ---------------------------------------------------------
+def safe_filename(text: str) -> str:
+    text = re.sub(r'[\\/*?:"<>|]', "", text)
+    text = re.sub(r"\s+", "_", text.strip())
+    return text[:100]
+
+
+def export_event_to_pdf(event: Event, output_dir: str = "pdf_events"):
+    """Define a function that allows to export a pdf from structured data."""
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    filename = (
+        f"{safe_filename(event.title)}_"
+        f"{event.start_datetime.strftime('%Y%m%d_%H%M')}.pdf"
+    )
+
+    filepath = os.path.join(output_dir, filename)
+
+    doc = SimpleDocTemplate(
+        filepath,
+        pagesize=A4,
+        rightMargin=20 * mm,
+        leftMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "EventTitle",
+        parent=styles["Title"],
+        alignment=TA_CENTER,
+        spaceAfter=15,
+    )
+
+    story = []
+
+    story.append(
+        Paragraph(event.title, title_style)
+    )
+
+    story.append(Spacer(1, 10))
+
+    data = [
+        ["Category", event.category],
+        ["Date", event.start_datetime.strftime("%d/%m/%Y")],
+        ["Time", event.start_datetime.strftime("%H:%M")],
+        ["Venue", event.venue],
+        ["City", event.city],
+        ["URL", event.source_url],
+        ["Expected reach", event.expected_reach]
+    ]
+
+    table = Table(
+        data,
+        colWidths=[40 * mm, 120 * mm]
+    )
+
+    table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ])
+    )
+
+    story.append(table)
+
+    doc.build(story)
+
+    return filepath
+
+
+async def export_events_pdf_node(state: AgentState) -> AgentState:
+    """Define the node which is orchestrated to export every event pdf."""
+
+    print("\n[NODE 6] Exporting events to PDF...")
+
+    events = state.get("events", [])
+
+    pdf_files = []
+
+    for event in events:
+
+        try:
+            filepath = export_event_to_pdf(event)
+
+            pdf_files.append(filepath)
+
+            print(f"[NODE 6] PDF created: {filepath}")
+
+        except Exception as e:
+            print(
+                f"[NODE 6 ERROR] "
+                f"Failed to create PDF for '{event.title}': {e}"
+            )
+
+    return {
+        **state,
+        "pdf_files": pdf_files,
+        "current_step": "pdf_exported"
     }

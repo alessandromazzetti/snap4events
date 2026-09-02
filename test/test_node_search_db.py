@@ -32,8 +32,7 @@ async def test_search_db_error_sets_retrieved_events_none():
 
 async def test_search_db_calls_get_events_with_city_param():
     """Regression test: get_events on the MCP server expects 'city', not
-    'location'. A previous bug sent 'location', which the server silently
-    ignored (or rejected)."""
+    'location'."""
 
     mcp = FakeMCPClient(db_events=[])
 

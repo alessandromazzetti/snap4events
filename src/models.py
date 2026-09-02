@@ -1,9 +1,7 @@
-
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
-
 
 # Event categories
 class EventCategory(str, Enum):
@@ -30,10 +28,11 @@ class Event(BaseModel):
     start_datetime: datetime = Field(..., description="Event datetime")
     venue: str = Field(..., description="Event venue")
     city: str = Field(..., description="City event")
-    coordinates: Optional[Coordinates] = Field(None, description="Event coordinates (optional)")
+    coordinates: Optional[Coordinates] = Field(None, description="Event coordinates")
     organizer: Optional[str] = Field(None, description="Event organizer")
     source_url: HttpUrl = Field(..., description="Event source URL")
     image_urls: List[HttpUrl] = Field(default_factory=list, description="Event image URLs")
+    expected_reach: Optional[int] = Field(None, description="Event expected rach")
 
     @classmethod
     def from_km4city_feature(cls, feature: dict) -> "Event":

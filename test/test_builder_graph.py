@@ -62,7 +62,8 @@ def test_web_search_pipeline_edges_are_linear_and_unconditional():
     for source, expected_target in [
         ("search_sources", "extract_events"),
         ("extract_events", "save_events"),
-        ("save_events", "__end__"),
+        ("save_events", "export_pdf"),
+        ("export_pdf", "__end__")
     ]:
         matching = [e for e in edges_by_source[source] if e.target == expected_target]
         assert matching, f"Expected an edge {source} -> {expected_target}"
