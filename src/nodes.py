@@ -595,9 +595,10 @@ async def extract_events_node(state: AgentState) -> AgentState:
                 the 8 most relevant/upcoming ones. This keeps the response
                 short enough to avoid being cut off.
             
-            13. If it is not indicated how many people are expected, give an esteem
-                based on similar events: if there are not enough events to make an esteem use 
-                "N/D"
+            13. 'expected_reach' MUST be an integer number (e.g. 50000). 
+                If it is not indicated how many people are expected, give an estimate
+                based on similar events. If there are not enough events to make an estimate,
+                use null (the JSON null value).
                 
             Webpage Text:
 

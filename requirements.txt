@@ -9,3 +9,4 @@ beautifulsoup4
 tavily-python
 typing-extensions
 EOF
+reportlab
