@@ -573,8 +573,11 @@ async def extract_events_node(state: AgentState) -> AgentState:
                - nightlife events -> "club"
                - incidents or weather events -> "other"
 
-            4. 'start_datetime' MUST be a valid ISO 8601 datetime
-               (e.g., '2026-08-14T20:00:00').
+            4. 'start_datetime' MUST be a VALID ISO 8601 datetime
+               (e.g., '2026-08-14T20:00:00'). Only future events must be returned,
+               avoid returning any event that has already occurred and if a certain
+               period of time is specified (i.e. this weekend), only events occurring
+               in that period must be returned.
 
             5. Today is {current_date}. Calculate upcoming dates correctly.
 
