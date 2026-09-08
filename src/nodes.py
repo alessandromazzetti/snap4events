@@ -40,19 +40,17 @@ def parse_llm_json(response):
 
     text = response.strip()
 
-    # Remove markdown code fences if the model returned ```json ... ```
-    if text.startswith("```"):
-        lines = text.splitlines()
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
 
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
+    if start_idx == -1 or end_idx == -1 or end_idx < start_idx:
+        return {"events": []}
 
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
+    # Extract text contained between {}
+    clean_json = text[start_idx:end_idx + 1]
 
-        text = "\n".join(lines).strip()
-
-    return json.loads(text)
+    # If this fails node 4 will enter try salvage truncated etc
+    return json.loads(clean_json)
 
 
 def salvage_truncated_events_json(response):
