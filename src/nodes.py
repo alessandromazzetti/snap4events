@@ -536,75 +536,51 @@ async def extract_events_node(state: AgentState) -> AgentState:
             )[:15000]
 
             prompt = f"""
-            You are an expert data extractor. Identify upcoming public events.
+            You are a strict and precise data extractor. Your primary goal is to find events that EXACTLY match the user's timeframe.
+
+            USER'S ORIGINAL REQUEST: "{query}"
+            TODAY'S DATE: {current_date}
 
             Return ONLY valid JSON.
 
             Required JSON format:
-
             {{
                 "events": [
                     {{
                         "title": "Event title",
                         "category": "concert",
-                        "start_datetime": "2026-08-31T20:00:00",
+                        "start_datetime": "2026-10-03T20:00:00",
                         "venue": "Venue name",
                         "city": "Firenze",
-                        "source_url": "{url}"
-                        "expected_reach": "50k"
+                        "source_url": "{url}",
+                        "expected_reach": 50000
                     }}
                 ]
             }}
 
-            CRITICAL RULES:
+            CRITICAL RULES (FOLLOW EXACTLY):
 
-            1. 'category' MUST be exactly one of:
-               - "sport"
-               - "culture"
-               - "cinema"
-               - "festival"
-               - "concert"
-               - "club"
-               - "other"
+            1. STRICT DATE FILTERING: Read the USER'S ORIGINAL REQUEST carefully. You MUST ONLY extract events that happen exactly during the requested dates (e.g., "first weekend of october"). 
 
-            2. Never use any other value for 'category'.
+            2. ALLOW EMPTY RESULTS: If the webpage does NOT contain events matching the exact requested timeframe, you MUST return an empty list: {{"events": []}}. Do NOT include events from other days or weeks just to fill the list.
 
-            3. Examples:
-               - running events -> "sport"
-               - food tours -> "culture"
-               - antique markets -> "other"
-               - nightlife events -> "club"
-               - incidents or weather events -> "other"
+            3. 'category' MUST be exactly one of: "sport", "culture", "cinema", "festival", "concert", "club", "other". (Do not use "market" or anything else).
 
-            4. 'start_datetime' MUST be a VALID ISO 8601 datetime
-               (e.g., '2026-08-14T20:00:00'). 
-               CRITICALLY: You must strictly filter the events to match the 
-               timeframe specified in the USER'S ORIGINAL REQUEST. If they ask 
-               for November, ONLY return events happening in November. 
+            4. 'start_datetime' MUST be a VALID ISO 8601 datetime.
 
-            5. Today is {current_date}. Calculate upcoming dates correctly.
+            5. 'expected_reach' MUST be an integer number (e.g. 50000). Do not use strings like "50k". If unknown, use null.
 
-            6. If venue is missing, use "N/D".
+            6. Extract AT MOST 8 events, but ONLY those that strictly pass the date filter in Rule 1. Quality is more important than quantity.
 
-            7. If city is missing, default to '{location}'.
+            7. If venue is missing, use "N/D". If city is missing, default to '{location}'.
 
-            8. Set source_url strictly to:
-               {url}
+            8. Set source_url strictly to: {url}
 
-            9. Do not invent events.
-
+            9. Do not invent events, do not include markdown, and do not include explanations.
+                        
             10. Do not include markdown.
 
             11. Do not include explanations.
-
-            12. Extract AT MOST 8 events. If the page lists more, keep only
-                the 8 most relevant/upcoming ones. This keeps the response
-                short enough to avoid being cut off.
-            
-            13. 'expected_reach' MUST be an integer number (e.g. 50000). 
-                If it is not indicated how many people are expected, give an estimate
-                based on similar events. If there are not enough events to make an estimate,
-                use null (the JSON null value).
                 
             Webpage Text:
 
