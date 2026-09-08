@@ -417,11 +417,12 @@ async def decide_retrieval_usage_node(state: AgentState) -> AgentState:
             # Convert the raw DB rows into validated Event objects to reuse downstream
             converted_events = []
 
-            for row in relevant_titles:
-                try:
-                    converted_events.append(event_from_db_row(row))
-                except Exception as conv_err:
-                    print(f"[NODE 2b WARNING] Skipping malformed stored event: {conv_err}")
+            for row in retrieved_events:
+                if row.get("title") in relevant_titles:
+                    try:
+                        converted_events.append(event_from_db_row(row))
+                    except Exception as conv_err:
+                        print(f"[NODE 2b WARNING] Skipping malformed stored event: {conv_err}")
 
             return {
                 **state,
