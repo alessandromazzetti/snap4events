@@ -364,40 +364,51 @@ async def decide_retrieval_usage_node(state: AgentState) -> AgentState:
     ]
 
     prompt = f"""
-You are deciding whether previously stored event data is good enough to answer
-a user's request, or whether a fresh web search is needed instead.
+    You are deciding whether previously stored event data is good enough to answer
+    a user's request, or whether a fresh web search is needed instead.
+    
+    Today is {current_date}.
+    Target location: {location}
+    User query: {query}
+    
+    Events already stored in the database ({len(events_summary)} total):
+    {json.dumps(events_summary, ensure_ascii=False, indent=2)}
+    
+    Decide whether these stored events are sufficient to answer the user query.
+    Consider:
+    - Relevance: do they actually match what the user is asking for (location, type of event)?
+    - Freshness: are there enough upcoming (not past) events?
+    - Coverage: is the number of events reasonable, or clearly too sparse?
 
-Today is {current_date}.
-Target location: {location}
-User query: {query}
+    CRITICAL: If you decide the data is sufficient, you MUST identify ONLY the specific 
+    events that match the exact timeframe requested by the user.
 
-Events already stored in the database ({len(events_summary)} total):
-{json.dumps(events_summary, ensure_ascii=False, indent=2)}
+    Return ONLY valid JSON in this exact format:
 
-Decide whether these stored events are sufficient to answer the user query.
-Consider:
-- Relevance: do they actually match what the user is asking for (location, type of event)?
-- Freshness: are there enough upcoming (not past) events?
-- Coverage: is the number of events reasonable, or clearly too sparse?
+    {{
+        "use_retrieved_data": true,
+        "reasoning": "short explanation",
+        "relevant_event_titles": ["Exact Title 1", "Exact Title 2"]
+    }}
 
-Return ONLY valid JSON in this exact format:
+    Set "use_retrieved_data" to false if the stored events are empty, irrelevant,
+    outdated, or clearly insufficient, in which case a web search will be triggered.
+    If false, leave "relevant_event_titles" as an empty list [].
 
-{{
-    "use_retrieved_data": true,
-    "reasoning": "short explanation"
-}}
-
-Set "use_retrieved_data" to false if the stored events are empty, irrelevant,
-outdated, or clearly insufficient, in which case a web search will be triggered.
-
-Do not include markdown.
-Do not include explanations outside the JSON.
-"""
+    Do not include markdown.
+    Do not include explanations outside the JSON.
+    """
 
     try:
         raw_response = await call_llm(state, prompt)
         answer = extract_answer(raw_response)
         data = parse_llm_json(answer)
+
+        # Pop the titles list out of the dictionary BEFORE passing it to Pydantic.
+        # This allows us to use the titles for filtering without causing a validation
+        # error if 'relevant_event_titles' doesn't exist in models.RetrievalDecision.
+        relevant_titles = set(data.pop("relevant_event_titles", []))
+
         decision = RetrievalDecision(**data)
 
         print(f"[NODE 2b] Decision: use_retrieved_data={decision.use_retrieved_data} ({decision.reasoning})")
@@ -406,7 +417,7 @@ Do not include explanations outside the JSON.
             # Convert the raw DB rows into validated Event objects to reuse downstream
             converted_events = []
 
-            for row in retrieved_events:
+            for row in relevant_titles:
                 try:
                     converted_events.append(event_from_db_row(row))
                 except Exception as conv_err:
