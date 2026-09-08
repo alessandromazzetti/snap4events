@@ -498,6 +498,7 @@ async def extract_events_node(state: AgentState) -> AgentState:
 
     urls = state.get("discovered_sources", [])
     location = state.get("target_location", "the area")
+    query = state.get("user_query", "")
     extracted_events_total = []
 
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -576,10 +577,10 @@ async def extract_events_node(state: AgentState) -> AgentState:
                - incidents or weather events -> "other"
 
             4. 'start_datetime' MUST be a VALID ISO 8601 datetime
-               (e.g., '2026-08-14T20:00:00'). Only future events must be returned,
-               avoid returning any event that has already occurred and if a certain
-               period of time is specified (i.e. this weekend), only events occurring
-               in that period must be returned.
+               (e.g., '2026-08-14T20:00:00'). 
+               CRITICALLY: You must strictly filter the events to match the 
+               timeframe specified in the USER'S ORIGINAL REQUEST. If they ask 
+               for November, ONLY return events happening in November. 
 
             5. Today is {current_date}. Calculate upcoming dates correctly.
 
