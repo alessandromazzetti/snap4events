@@ -451,9 +451,11 @@ async def search_sources_node(state: AgentState) -> AgentState:
     """Finds URLs containing info about events in the given location using Tavily."""
 
     location = state.get("target_location", "")
+    query = state.get("user_query", "")  # Extract the original query
     print(f"\n[NODE 3] Searching web for: {location}")
 
-    search_query = f"best event sites festivals clubs {location} today weekend"
+    # Dynamically build the search using the user's actual request
+    search_query = f"events festivals clubs {location} {query}"
 
     try:
         client = TavilyClient()
