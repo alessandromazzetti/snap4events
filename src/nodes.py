@@ -8,7 +8,6 @@ from bs4 import BeautifulSoup
 from tavily import TavilyClient
 from state import AgentState
 from models import LocationExtraction, EventList, RetrievalDecision, Event
-import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
@@ -475,7 +474,7 @@ async def search_sources_node(state: AgentState) -> AgentState:
             client.search,
             query=search_query,
             search_depth="basic",
-            max_results=4
+            max_results=10
         )
 
         discovered_urls = [
